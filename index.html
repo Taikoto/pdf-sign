@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -39,8 +39,17 @@
             <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <div class="user-dropdown" id="user-dropdown">
-            <div class="dropdown-header" id="dropdown-header">已保存签名</div>
+            <div class="dropdown-section-title">
+              <svg viewBox="0 0 24 24" fill="none" width="13" height="13"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              已保存签名
+            </div>
             <div class="saved-sigs-list" id="saved-sigs-list"></div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-section-title">
+              <svg viewBox="0 0 24 24" fill="none" width="13" height="13"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              签署记录
+            </div>
+            <div class="sign-records-list" id="sign-records-list"></div>
             <div class="dropdown-divider"></div>
             <button class="dropdown-item danger" id="btn-logout">
               <svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -156,6 +165,7 @@
           <button class="sign-tab active" data-tab="draw">手写签名</button>
           <button class="sign-tab" data-tab="text">文字签名</button>
           <button class="sign-tab" data-tab="date">日期填写</button>
+          <button class="sign-tab" data-tab="template">模板</button>
         </div>
 
         <!-- 手写签名 -->
@@ -210,6 +220,19 @@
               <input type="range" id="date-size" min="10" max="80" value="36" />
             </label>
             <button class="btn btn-outline btn-sm" id="btn-today">填入今天</button>
+          </div>
+        </div>
+
+        <!-- 模板 -->
+        <div class="sign-tab-content hidden" id="tab-template">
+          <div class="template-tip">
+            <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9L13 2z" stroke="#4F46E5" stroke-width="2"/><path d="M13 2v7h7" stroke="#4F46E5" stroke-width="2"/></svg>
+            将当前签名为模板保存，下次可直接使用
+          </div>
+          <div id="template-list" class="template-list"></div>
+          <div class="template-save-section" id="template-save-section">
+            <input type="text" id="template-name-input" class="text-input" placeholder="输入模板名称，如"我的手写签名"" maxlength="20" />
+            <button class="btn btn-outline btn-sm" id="btn-save-as-template">保存为模板</button>
           </div>
         </div>
 
