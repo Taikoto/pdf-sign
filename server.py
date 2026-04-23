@@ -86,12 +86,12 @@ def health():
 
 @app.route('/')
 def index():
-    return send_from_directory('pdf-sign', 'index.html')
+    return send_from_directory('.', 'index.html')
 
 
-@app.route('/pdf-sign/<path:filename>')
+@app.route('/<path:filename>')
 def static_files(filename):
-    return send_from_directory('pdf-sign', filename)
+    return send_from_directory('.', filename)
 
 
 # ─── 注册 ────────────────────────────────────────────────
