@@ -20,15 +20,14 @@
 
 ## 快速启动
 
-### 仅前端（静态模式）
+### 仅前端（静态模式，无需后端）
 
 ```bash
-cd pdf-sign
-python -m http.server 3030
-# 访问 http://localhost:3030
+python -m http.server 8080
+# 访问 http://localhost:8080
 ```
 
-### 后端模式（支持账号保存）
+### 后端模式（支持账号保存签名）
 
 ```bash
 # 安装依赖
@@ -42,11 +41,16 @@ python server.py
 ## 项目结构
 
 ```
-pdf-sign/
 ├── index.html   # 页面结构
 ├── style.css    # 样式
-└── app.js       # 前端逻辑
-
-server.py        # Flask 后端（账号系统）
-signatures.db    # SQLite 数据库（自动生成）
+├── app.js       # 前端逻辑
+├── server.py    # Flask 后端（账号系统）
+└── signatures.db # SQLite 数据库（自动生成）
 ```
+
+## 在线访问
+
+👉 https://taikoto.github.io/pdf-sign/
+
+> GitHub Pages 托管为静态版本，无账号保存功能。
+> 如需账号保存，请本地运行 `python server.py` 后访问 http://localhost:5050

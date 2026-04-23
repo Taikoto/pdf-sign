@@ -1,4 +1,4 @@
-// ========== 配置 PDF.js Worker ==========
+﻿// ========== 配置 PDF.js Worker ==========
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
