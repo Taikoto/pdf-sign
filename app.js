@@ -1,4 +1,4 @@
-﻿// ========== 配置 PDF.js Worker ==========
+// ========== 配置 PDF.js Worker ==========
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -40,6 +40,11 @@ class API {
   saveSig(data)   { return this.req('POST', '/api/signatures', data); }
   delSig(id)      { return this.req('DELETE', `/api/signatures/${id}`); }
   renameSig(id, n){ return this.req('PUT',  `/api/signatures/${id}`, { name: n }); }
+  getTemplates()   { return this.req('GET',  '/api/templates'); }
+  saveTemplate(data) { return this.req('POST', '/api/templates', data); }
+  delTemplate(id) { return this.req('DELETE', `/api/templates/${id}`); }
+  getRecords()    { return this.req('GET',  '/api/records'); }
+  saveRecord(data){ return this.req('POST', '/api/records', data); }
 }
 const api = new API();
 
@@ -71,8 +76,10 @@ function updateAuthUI() {
   if (sess) {
     $('user-display-name').textContent = sess.username;
     loadSavedSignatures();
+    loadSignRecords();
   } else {
     $('saved-sigs-list').innerHTML = '';
+    $('sign-records-list').innerHTML = '<div class="record-empty">登录后查看记录</div>';
     closeUserDropdown();
   }
 }
@@ -215,7 +222,8 @@ function typeLabel(type) {
 
 function formatDate(ts) {
   const d = new Date(ts * 1000);
-  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // ========== 初始化 Auth 事件 ==========
@@ -373,10 +381,14 @@ document.querySelectorAll('.sign-tab').forEach(tab => {
     $('tab-draw').classList.toggle('hidden', state.currentTab !== 'draw');
     $('tab-text').classList.toggle('hidden', state.currentTab !== 'text');
     $('tab-date').classList.toggle('hidden', state.currentTab !== 'date');
+    $('tab-template').classList.toggle('hidden', state.currentTab !== 'template');
     if (state.currentTab === 'date') {
       // 若日期为空，自动填入今天
       if (!$('date-year').value) fillToday();
       updateDatePreview();
+    }
+    if (state.currentTab === 'template') {
+      loadTemplates();
     }
   });
 });
@@ -622,9 +634,8 @@ $('date-size').addEventListener('input', updateDatePreview);
 $('btn-today').addEventListener('click', fillToday);
 
 // ========== 添加签名到页面 ==========
-function addSignatureToPage(dataUrl) {
+function addSignatureToPage(dataUrl, extraStr) {
   const id = ++state.signIdCounter;
-  // 默认放在页面中心
   const canvasW = pdfCanvas.width;
   const canvasH = pdfCanvas.height;
   const sigW = 160, sigH = 60;
@@ -632,15 +643,16 @@ function addSignatureToPage(dataUrl) {
     id,
     dataUrl,
     page: state.currentPage,
-    x: (canvasW / 2 - sigW / 2) / canvasW,   // 归一化坐标 [0,1]
+    x: (canvasW / 2 - sigW / 2) / canvasW,
     y: (canvasH / 2 - sigH / 2) / canvasH,
     w: sigW / canvasW,
     h: sigH / canvasH,
+    timestamp: makeTimestamp(),
   };
   state.signatures.push(sig);
   refreshSignOverlay();
   updateSignList();
-  showToast('签名已添加，可拖拽调整位置', 'success');
+  showToast(`签名已添加（${sig.timestamp}）`, 'success');
 }
 
 // ========== 渲染签名覆盖层 ==========
@@ -666,6 +678,12 @@ function refreshSignOverlay() {
       const handle = document.createElement('div');
       handle.className = 'sign-handle';
       el.appendChild(handle);
+
+      // 时间戳标签
+      const tsBadge = document.createElement('div');
+      tsBadge.className = 'sign-timestamp';
+      tsBadge.textContent = sig.timestamp || '';
+      el.appendChild(tsBadge);
 
       // 拖拽移动（鼠标 + 触摸）
       el.addEventListener('mousedown', e => {
@@ -839,6 +857,7 @@ function updateSignList() {
       <img src="${sig.dataUrl}" alt="签名" />
       <div class="sign-list-item-info">
         <div class="sign-list-item-page">第 ${sig.page} 页</div>
+        <div class="sign-list-item-time">${sig.timestamp || ''}</div>
       </div>
       <button class="sign-list-item-del" title="删除" data-id="${sig.id}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -978,6 +997,204 @@ window.addEventListener('resize', () => {
     sidebarOverlay.classList.remove('visible');
   }
 });
+
+// ========== 模板功能 ==========
+async function loadTemplates() {
+  const list = $('template-list');
+  if (!getSession()) {
+    list.innerHTML = '<div class="template-tip error">请先登录后使用模板功能</div>';
+    return;
+  }
+  list.innerHTML = '<div class="template-tip">加载中…</div>';
+  try {
+    const temps = await api.getTemplates();
+    if (!temps.length) {
+      list.innerHTML = '<div class="template-tip">暂无模板，保存当前签名即可创建</div>';
+      return;
+    }
+    list.innerHTML = temps.map(t => `
+      <div class="template-item" data-id="${t.id}" data-content="${encodeURIComponent(t.content)}" data-type="${t.sig_type}" data-color="${t.color || ''}" data-extra="${encodeURIComponent(t.extra || '{}')}">
+        <img class="template-thumb" src="${t.content}" alt="${t.name}" />
+        <div class="template-info">
+          <div class="template-name">${t.name}</div>
+          <div class="template-meta">${typeLabel(t.sig_type)} · ${formatDate(t.created_at)}</div>
+        </div>
+        <button class="template-del" data-id="${t.id}" title="删除模板">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    `).join('');
+
+    // 点击使用模板
+    list.querySelectorAll('.template-item').forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target.closest('.template-del')) return;
+        const { content, type, color, extra } = el.dataset;
+        const dataUrl = decodeURIComponent(content);
+        closeSignModal();
+        addSignatureToPage(dataUrl, decodeURIComponent(extra || '{}'));
+        showToast('模板签名已添加到页面');
+      });
+    });
+
+    // 删除模板
+    list.querySelectorAll('.template-del').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!confirm('确认删除该模板？')) return;
+        try {
+          await api.delTemplate(btn.dataset.id);
+          loadTemplates();
+          showToast('模板已删除');
+        } catch(err) { showToast(err.message, 'error'); }
+      });
+    });
+  } catch(e) {
+    list.innerHTML = '<div class="template-tip error">加载失败</div>';
+  }
+}
+
+async function saveAsTemplate() {
+  if (!getSession()) { showToast('请先登录', 'error'); return; }
+  const name = $('template-name-input').value.trim();
+  if (!name) { showToast('请输入模板名称', 'error'); return; }
+  let dataUrl, sig_type, color, extra = '{}';
+  if (state.currentTab === 'draw') {
+    const imgData = sCtx.getImageData(0, 0, signCanvas.width, signCanvas.height);
+    const hasStroke = imgData.data.some((v, i) => i % 4 === 3 && v > 0);
+    if (!hasStroke) { showToast('请先绘制签名', 'error'); return; }
+    dataUrl = getTrimmedSignature();
+    sig_type = 'draw';
+    color = $('sign-color').value;
+    extra = JSON.stringify({ size: $('sign-size').value });
+  } else if (state.currentTab === 'text') {
+    const text = $('text-sign-input').value.trim();
+    if (!text) { showToast('请先输入文字签名', 'error'); return; }
+    dataUrl = textToDataUrl(text);
+    sig_type = 'text';
+    color = $('text-sign-color').value;
+  } else if (state.currentTab === 'date') {
+    const y = $('date-year').value, m = $('date-month').value, d = $('date-day').value;
+    if (!y || !m || !d) { showToast('请先填写日期', 'error'); return; }
+    dataUrl = dateToDataUrl(y, m, d);
+    sig_type = 'date';
+    color = $('date-color').value;
+  }
+  try {
+    await api.saveTemplate({ name, sig_type, content: dataUrl, color, extra });
+    $('template-name-input').value = '';
+    loadTemplates();
+    showToast('模板已保存！');
+  } catch(e) { showToast('保存失败：' + e.message, 'error'); }
+}
+
+$('btn-save-as-template').addEventListener('click', saveAsTemplate);
+
+// ========== 签署时间戳（添加到签名元数据） ==========
+function makeTimestamp() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+// ========== SHA-256 哈希计算 ==========
+async function sha256(buffer) {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function computeFileHash(bytes) {
+  return await sha256(bytes);
+}
+
+// ========== 签署记录 ==========
+async function loadSignRecords() {
+  const list = $('sign-records-list');
+  if (!getSession()) {
+    list.innerHTML = '<div class="record-empty">登录后查看记录</div>';
+    return;
+  }
+  list.innerHTML = '<div class="record-empty">加载中…</div>';
+  try {
+    const records = await api.getRecords();
+    if (!records.length) {
+      list.innerHTML = '<div class="record-empty">暂无签署记录</div>';
+      return;
+    }
+    list.innerHTML = records.map(r => `
+      <div class="record-item">
+        <div class="record-doc">${r.doc_name}</div>
+        <div class="record-meta">
+          <span>${r.sig_count} 个签名</span> ·
+          <span>${r.page_count} 页</span>
+        </div>
+        <div class="record-time">${formatDate(r.signed_at)}</div>
+        <div class="record-hash" title="文件哈希（SHA-256）">${r.file_hash.substring(0, 12)}…</div>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="record-empty">加载失败</div>';
+  }
+}
+
+// 更新导出 PDF：计算哈希 + 保存记录
+async function exportPDF() {
+  if (!state.pdfBytes) return;
+  if (state.signatures.length === 0) { showToast('请先添加签名再导出', 'error'); return; }
+
+  showToast('正在生成 PDF，请稍候…');
+  try {
+    const { PDFDocument } = PDFLib;
+    const pdfDoc = await PDFDocument.load(state.pdfBytes);
+    const pages  = pdfDoc.getPages();
+
+    for (const sig of state.signatures) {
+      const page = pages[sig.page - 1];
+      const { width: pw, height: ph } = page.getSize();
+      const imgBytes = await dataUrlToBytes(sig.dataUrl);
+      const pdfImg   = await pdfDoc.embedPng(imgBytes);
+      const sigW = sig.w * pw;
+      const sigH = sig.h * ph;
+      const sigX = sig.x * pw;
+      const sigY = ph - (sig.y + sig.h) * ph;
+      page.drawImage(pdfImg, { x: sigX, y: sigY, width: sigW, height: sigH });
+    }
+
+    // 计算原始 PDF 的哈希（用于存证）
+    const rawHash = await computeFileHash(state.pdfBytes);
+
+    // 生成带签名后的 PDF 字节
+    const pdfBytesOut = await pdfDoc.save();
+
+    // 保存签署记录（登录用户）
+    const docName = $('doc-name').textContent || '未命名.pdf';
+    if (getSession()) {
+      try {
+        const signedHash = await computeFileHash(pdfBytesOut);
+        await api.saveRecord({
+          doc_name: docName,
+          file_hash: signedHash,
+          page_count: state.totalPages,
+          sig_count: state.signatures.length
+        });
+        showToast(`PDF 导出成功！SHA-256: ${signedHash.substring(0, 16)}…`);
+      } catch(e) {
+        showToast('PDF 导出成功（记录保存失败）', 'success');
+      }
+    } else {
+      showToast(`PDF 导出成功！SHA-256: ${rawHash.substring(0, 16)}…`);
+    }
+
+    // 下载文件名带时间戳
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const baseName = docName.replace(/\.pdf$/i, '');
+    downloadBytes(pdfBytesOut, `${baseName}_已签署_${ts}.pdf`);
+  } catch (err) {
+    showToast('导出失败：' + err.message, 'error');
+    console.error(err);
+  }
+}
 
 // ========== 初始化 ==========
 initAuth();
