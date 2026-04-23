@@ -1,7 +1,7 @@
 """
-Flask 后端 - 用户注册/登录 + 签名 CRUD
+Flask 后端 - 用户注册/登录 + 签名 CRUD + 模板 + 签署记录
 """
-import sqlite3, hashlib, uuid, os
+import sqlite3, hashlib, uuid, os, time
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -37,6 +37,31 @@ def init_db():
                 color     TEXT DEFAULT '',
                 extra     TEXT DEFAULT '{}',
                 created_at INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS templates (
+                id         TEXT PRIMARY KEY,
+                user_id    TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                sig_type   TEXT NOT NULL,
+                content    TEXT NOT NULL,
+                color      TEXT DEFAULT '',
+                extra      TEXT DEFAULT '{}',
+                created_at  INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS sign_records (
+                id         TEXT PRIMARY KEY,
+                user_id    TEXT NOT NULL,
+                doc_name   TEXT NOT NULL,
+                file_hash  TEXT NOT NULL,
+                page_count INTEGER NOT NULL,
+                sig_count  INTEGER NOT NULL,
+                signed_at  INTEGER NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         ''')
@@ -193,6 +218,88 @@ def del_sig(uid, sid):
     if cur.rowcount == 0:
         return jsonify({'error': '签名不存在'}), 404
     return jsonify({'ok': True})
+
+
+# ─── 模板 CRUD ───────────────────────────────────────────
+@app.route('/api/templates', methods=['GET'])
+@auth
+def get_templates(uid):
+    with get_db() as db:
+        rows = db.execute(
+            'SELECT id, name, sig_type, content, color, extra, created_at '
+            'FROM templates WHERE user_id = ? ORDER BY created_at DESC',
+            (uid,)
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/templates', methods=['POST'])
+@auth
+def save_template(uid):
+    data     = request.json
+    name     = (data.get('name') or '模板').strip()
+    sig_type = data.get('sig_type', 'draw')
+    content  = data.get('content', '')
+    color    = data.get('color', '')
+    extra    = data.get('extra', '{}')
+    if not content:
+        return jsonify({'error': '内容不能为空'}), 400
+    tid = uuid.uuid4().hex
+    ts  = int(time.time())
+    with get_db() as db:
+        db.execute(
+            'INSERT INTO templates (id, user_id, name, sig_type, content, color, extra, created_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (tid, uid, name, sig_type, content, color, extra, ts)
+        )
+        db.commit()
+    return jsonify({'id': tid, 'created_at': ts})
+
+
+@app.route('/api/templates/<tid>', methods=['DELETE'])
+@auth
+def del_template(uid, tid):
+    with get_db() as db:
+        cur = db.execute(
+            'DELETE FROM templates WHERE id = ? AND user_id = ?', (tid, uid)
+        )
+        db.commit()
+    if cur.rowcount == 0:
+        return jsonify({'error': '模板不存在'}), 404
+    return jsonify({'ok': True})
+
+
+# ─── 签署记录 CRUD ────────────────────────────────────────
+@app.route('/api/records', methods=['GET'])
+@auth
+def get_records(uid):
+    with get_db() as db:
+        rows = db.execute(
+            'SELECT id, doc_name, file_hash, page_count, sig_count, signed_at '
+            'FROM sign_records WHERE user_id = ? ORDER BY signed_at DESC LIMIT 50',
+            (uid,)
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/records', methods=['POST'])
+@auth
+def save_record(uid):
+    data       = request.json
+    doc_name   = (data.get('doc_name') or '未命名').strip()
+    file_hash  = data.get('file_hash', '')
+    page_count = int(data.get('page_count', 0))
+    sig_count  = int(data.get('sig_count', 0))
+    rid  = uuid.uuid4().hex
+    ts   = int(time.time())
+    with get_db() as db:
+        db.execute(
+            'INSERT INTO sign_records (id, user_id, doc_name, file_hash, page_count, sig_count, signed_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (rid, uid, doc_name, file_hash, page_count, sig_count, ts)
+        )
+        db.commit()
+    return jsonify({'id': rid, 'signed_at': ts})
 
 
 # ─── 启动 ────────────────────────────────────────────────
