@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF 电子签名</title>
+  <link rel="stylesheet" href="/pdf-sign/style.css" />
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <header class="header">
+    <div class="header-left">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="none">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8L14 2z" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 2v6h6M9 13h6M9 17h6M9 9h1" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="logo-text">PDF 电子签名</span>
+    </div>
+    <div class="header-actions">
+      <!-- 登录前显示 -->
+      <div id="auth-guest" class="auth-area">
+        <button class="btn btn-outline btn-sm" id="btn-login">登录</button>
+        <button class="btn btn-primary btn-sm" id="btn-register">注册</button>
+      </div>
+      <!-- 登录后显示 -->
+      <div id="auth-user" class="auth-area hidden">
+        <button id="btn-add-sign" class="btn btn-secondary" disabled>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          添加签名
+        </button>
+        <button id="btn-export" class="btn btn-primary" disabled>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          导出 PDF
+        </button>
+        <div class="user-menu" id="user-menu">
+          <button class="user-btn" id="btn-user-menu">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span id="user-display-name">用户名</span>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="user-dropdown" id="user-dropdown">
+            <div class="dropdown-header" id="dropdown-header">已保存签名</div>
+            <div class="saved-sigs-list" id="saved-sigs-list"></div>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item danger" id="btn-logout">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              退出登录
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- 上传区域（无文件时显示） -->
+    <div id="upload-area" class="upload-area">
+      <div class="upload-card">
+        <div class="upload-icon">
+          <svg viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="32" fill="#EEF2FF"/>
+            <path d="M32 42V22M22 32l10-10 10 10" stroke="#4F46E5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20 46h24" stroke="#4F46E5" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2>上传 PDF 文件</h2>
+        <p>点击选择文件，或将 PDF 拖拽到此处</p>
+        <label class="upload-btn" for="pdf-input">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8L14 2z" stroke="currentColor" stroke-width="2"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="2"/></svg>
+          选择 PDF 文件
+        </label>
+        <input type="file" id="pdf-input" accept=".pdf" hidden />
+        <p class="upload-hint">支持 PDF 格式，文件仅在本地处理，不上传服务器</p>
+      </div>
+    </div>
+
+    <!-- 工作区域（有文件后显示） -->
+    <div id="workspace" class="workspace hidden">
+      <!-- 左侧工具栏 -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-title">文档信息</div>
+          <div class="doc-info">
+            <div class="doc-name" id="doc-name">—</div>
+            <div class="doc-pages" id="doc-pages">— 页</div>
+          </div>
+          <button class="btn btn-outline btn-full" onclick="document.getElementById('pdf-input').click()">
+            重新上传
+          </button>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-title">页面导航</div>
+          <div class="page-nav">
+            <button id="btn-prev" class="btn btn-outline btn-icon" title="上一页">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <span class="page-indicator">
+              第 <input id="page-input" type="number" min="1" value="1" /> 页
+            </span>
+            <button id="btn-next" class="btn btn-outline btn-icon" title="下一页">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <div class="page-total" id="page-total">共 — 页</div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-title">缩放</div>
+          <div class="zoom-control">
+            <button id="btn-zoom-out" class="btn btn-outline btn-icon">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16zM8 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <span id="zoom-label" class="zoom-label">100%</span>
+            <button id="btn-zoom-in" class="btn btn-outline btn-icon">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16zM11 8v6M8 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-title">签名列表</div>
+          <div id="sign-list" class="sign-list">
+            <div class="sign-empty">尚未添加签名</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- PDF 预览区域 -->
+      <div class="pdf-viewer-wrap">
+        <div id="pdf-container" class="pdf-container">
+          <div id="pdf-page-wrap" class="pdf-page-wrap">
+            <canvas id="pdf-canvas"></canvas>
+            <!-- 签名覆盖层 -->
+            <div id="sign-overlay" class="sign-overlay"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 签名绘制弹窗 -->
+  <div id="sign-modal" class="modal hidden">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>绘制您的签名</h3>
+        <button class="modal-close" id="btn-modal-close">&times;</button>
+      </div>
+      <div class="rotate-hint" id="rotate-hint">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3v5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        请将手机横屏使用，获得最佳签名体验
+      </div>
+      <div class="modal-body">
+        <div class="sign-tabs">
+          <button class="sign-tab active" data-tab="draw">手写签名</button>
+          <button class="sign-tab" data-tab="text">文字签名</button>
+          <button class="sign-tab" data-tab="date">日期填写</button>
+        </div>
+
+        <!-- 手写签名 -->
+        <div class="sign-tab-content" id="tab-draw">
+          <canvas id="sign-canvas" class="sign-canvas" width="500" height="200"></canvas>
+          <div class="sign-tools">
+            <label class="sign-tool-item">
+              <span>颜色</span>
+              <input type="color" id="sign-color" value="#1a1a2e" />
+            </label>
+            <label class="sign-tool-item">
+              <span>粗细</span>
+              <input type="range" id="sign-size" min="1" max="8" value="2" />
+            </label>
+            <button class="btn btn-sm btn-undo" id="btn-undo-sign">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 14L4 9l5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-7a4 4 0 00-4-4H4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              撤回
+            </button>
+            <button class="btn btn-outline btn-sm" id="btn-clear-sign">清除</button>
+          </div>
+        </div>
+
+        <!-- 日期填写 -->
+        <div class="sign-tab-content hidden" id="tab-date">
+          <div class="date-preview" id="date-preview">
+            <span id="date-preview-content">请选择日期</span>
+          </div>
+          <div class="date-inputs">
+            <div class="date-field-group">
+              <label>年</label>
+              <input type="number" id="date-year" min="1900" max="2100" placeholder="2026" />
+            </div>
+            <div class="date-sep">年</div>
+            <div class="date-field-group">
+              <label>月</label>
+              <input type="number" id="date-month" min="1" max="12" placeholder="04" />
+            </div>
+            <div class="date-sep">月</div>
+            <div class="date-field-group">
+              <label>日</label>
+              <input type="number" id="date-day" min="1" max="31" placeholder="23" />
+            </div>
+            <div class="date-sep">日</div>
+          </div>
+          <div class="sign-tools">
+            <label class="sign-tool-item">
+              <span>颜色</span>
+              <input type="color" id="date-color" value="#1a1a2e" />
+            </label>
+            <label class="sign-tool-item">
+              <span>字体大小</span>
+              <input type="range" id="date-size" min="10" max="80" value="36" />
+            </label>
+            <button class="btn btn-outline btn-sm" id="btn-today">填入今天</button>
+          </div>
+        </div>
+
+        <!-- 文字签名 -->
+        <div class="sign-tab-content hidden" id="tab-text">
+          <div class="text-sign-preview" id="text-sign-preview">
+            <span id="text-preview-content">请输入签名文字</span>
+          </div>
+          <input type="text" id="text-sign-input" class="text-input" placeholder="输入您的姓名" maxlength="20" />
+          <div class="sign-tools">
+            <label class="sign-tool-item">
+              <span>颜色</span>
+              <input type="color" id="text-sign-color" value="#1a1a2e" />
+            </label>
+            <label class="sign-tool-item">
+              <span>字体大小</span>
+              <input type="range" id="text-sign-size" min="20" max="80" value="40" />
+            </label>
+            <label class="sign-tool-item">
+              <span>字体</span>
+              <select id="text-sign-font">
+                <option value="Ma Shan Zheng, cursive">楷体</option>
+                <option value="STKaiti, KaiTi, serif">仿楷</option>
+                <option value="Georgia, serif">英文衬线</option>
+                <option value="Arial, sans-serif">无衬线</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btn-cancel-sign">取消</button>
+        <button class="btn btn-primary" id="btn-confirm-sign">使用此签名</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 签名上下文菜单 -->
+  <div id="sign-context-menu" class="context-menu hidden">
+    <button class="context-item" id="ctx-delete">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      删除签名
+    </button>
+    <button class="context-item" id="ctx-resize-smaller">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      缩小
+    </button>
+    <button class="context-item" id="ctx-resize-larger">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      放大
+    </button>
+  </div>
+
+  <!-- 提示 Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- 登录弹窗 -->
+  <div id="auth-modal" class="modal hidden">
+    <div class="modal-backdrop" id="auth-backdrop"></div>
+    <div class="auth-modal-dialog">
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth-tab="login">登录</button>
+        <button class="auth-tab" data-auth-tab="register">注册</button>
+      </div>
+      <div class="auth-form-wrap" id="auth-form-login">
+        <div class="form-field">
+          <label>用户名</label>
+          <input type="text" id="login-username" placeholder="输入用户名" autocomplete="username" />
+        </div>
+        <div class="form-field">
+          <label>密码</label>
+          <input type="password" id="login-password" placeholder="输入密码" autocomplete="current-password" />
+        </div>
+        <div id="login-error" class="auth-error hidden"></div>
+        <button class="btn btn-primary btn-full" id="btn-do-login">登录</button>
+      </div>
+      <div class="auth-form-wrap hidden" id="auth-form-register">
+        <div class="form-field">
+          <label>用户名</label>
+          <input type="text" id="reg-username" placeholder="2-30个字符" autocomplete="username" maxlength="30" />
+        </div>
+        <div class="form-field">
+          <label>密码</label>
+          <input type="password" id="reg-password" placeholder="至少 6 位" autocomplete="new-password" />
+        </div>
+        <div class="form-field">
+          <label>确认密码</label>
+          <input type="password" id="reg-password2" placeholder="再次输入密码" autocomplete="new-password" />
+        </div>
+        <div id="reg-error" class="auth-error hidden"></div>
+        <button class="btn btn-primary btn-full" id="btn-do-register">注册</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 移动端底部工具栏 -->
+  <div id="mobile-toolbar" class="mobile-toolbar">
+    <button class="mobile-tool-btn" id="mbtn-prev" title="上一页">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      上一页
+    </button>
+    <button class="mobile-tool-btn" id="mbtn-add" title="添加签名">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      添加签名
+    </button>
+    <button class="mobile-tool-btn" id="mbtn-next" title="下一页">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      下一页
+    </button>
+    <button class="mobile-tool-btn" id="mbtn-export" title="导出">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      导出
+    </button>
+  </div>
+
+  <!-- 侧边栏遮罩 -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <!-- 依赖库 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="/pdf-sign/app.js"></script>
+</body>
+</html>
